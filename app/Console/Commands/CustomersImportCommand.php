@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use PDO;
 use App\Models\User;
 use App\ImportHelper;
 use Illuminate\Console\Command;
@@ -363,7 +364,7 @@ class CustomersImportCommand extends Command
          * It's uses Laravel 11.23.2's new feature called 'Concurrency'
          * This new feature allows to run tasks concurrently in Laravel, enabling asynchronous execution of operations.
          */
-        /**/
+        /*
             $tasks = [];
             $numberOfProcesses = 8; // Number of my current machine's processes
 
@@ -375,7 +376,12 @@ class CustomersImportCommand extends Command
                 // You're just defining the closures (anonymous functions). 
                 // Each of those functions knows what to do when it's called, but they’re not being executed during the loop. 
                 // They're just sitting in the $tasks array like this:
-                // $tasks = [ function() { /* do process 0 work */ }, function() { /* do process 1 work */ }, function() { /* do process 7 work */ }, ... ]
+                // [
+                //     function() { do process 0 work },
+                //     function() { do process 1 work },
+                //     function() { do process 2 work },
+                //     ...
+                // ]
                 // It will be run in the Concurrency::run() method
                 $tasks[] = function() use ($filepath, $i, $numberOfProcesses) {
                     
@@ -430,8 +436,62 @@ class CustomersImportCommand extends Command
 
             }
 
+            // Run the tasks concurrently
+            // This will execute all the closures in the $tasks array at the same time
+            // Each closure will run in its own process, allowing for concurrent execution
+            // This is where the magic happens!
+            // The Concurrency::run() method will take care of executing each closure in parallel
+            // It will manage the processes, handle any errors, and ensure that all tasks are completed
+            // The Concurrency::run() method will return when all tasks are completed
+            // This is the final step where all the closures are executed concurrently
             Concurrency::run($tasks);
+        /*
+
+        /**
+         * Resolved moderate time and querries issuees along with previously resolved issues
+         * Working with 2 million rows
+         * More efficient approach than above [took minimum time, memories & queries]
+         * It's uses Laravel 11.23.2's new feature called 'Concurrency'
+         * This new feature allows to run tasks concurrently in Laravel, enabling asynchronous execution of operations.
+         */
         /**/
+            // Resolve the whole problem using MySQL's LOAD DATA INFILE
+            // This is the most efficient way to import large CSV files into MySQL directly
+            // It uses the MySQL's LOAD DATA INFILE command to load data from a CSV file into a MySQL table
+            // By default, MySQL does not allow loading data from local files for security reasons
+            // You need to enable it in your MySQL configuration
+            // You can do this by adding the following line to your MySQL configuration file (my.cnf or my.ini)
+            // [mysqld]
+            // local-infile=1
+            // Or you can enable it in your MySQL command line by running the following command
+            // SET GLOBAL local_infile = 1;
+            // You can also enable it in your MySQL connection string by adding the following option
+            // ?local_infile=1
+        /**/
+
+        $pdo = DB::connection()->getPdo();
+        $pdo->setAttribute(PDO::MYSQL_ATTR_LOCAL_INFILE, true);
+        $filepath = str_replace('\\', '/', $filepath);
+
+        $query = <<<SQL
+            LOAD DATA LOCAL INFILE '{$filepath}'
+            INTO TABLE users
+            FIELDS TERMINATED BY ','
+            ENCLOSED BY '"'
+            LINES TERMINATED BY '\n'
+            IGNORE 1 LINES
+            (@col1, @col2, @col3, @col4, @col5, @col6)
+            SET
+                name = @col1,
+                email = @col2,
+                company = @col3,
+                city = @col4,
+                country = @col5,
+                birthday = @col6,
+                password = 'default_hashed_password',
+        SQL;
+
+        $pdo->exec($query);
 
     }
 }
