@@ -1,0 +1,575 @@
+<?php
+
+namespace App;
+
+use App\Models\User;
+use Illuminate\Support\Facades\Concurrency;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\LazyCollection;
+use Illuminate\Support\Str;
+use PDO;
+use PDOStatement;
+
+use function Laravel\Prompts\select;
+
+trait ImportHelper
+{
+    protected float $benchmarkStartTime;
+
+    protected int $benchmarkStartMemory;
+
+    protected int $startRowCount;
+
+    protected int $startQueries;
+
+    public function handle(): void
+    {
+        error_reporting(E_ALL);
+        ini_set('display_errors', 1);
+        User::truncate();
+        $filePath = $this->selectFile();
+        $this->startBenchmark();
+
+        try {
+            $this->handleImport($filePath);
+        } catch (\Exception $e) {
+            $this->error(get_class($e).' '.Str::of($e->getMessage())->limit(100)->value());
+        }
+
+        $this->endBenchmark();
+    }
+
+    protected function selectFile(): string
+    {
+        $file = select(
+            label: 'What file do you want to import?',
+            options: ['CSV 100 Users', 'CSV 1K Users', 'CSV 10K Users', 'CSV 100K Users', 'CSV 1M Users', 'CSV 2M Users']
+        );
+
+        return match ($file) {
+            'CSV 100 Users' => public_path('csv_files/users-100.csv'),
+            'CSV 1K Users' => public_path('csv_files/users-1k.csv'),
+            'CSV 10K Users' => public_path('csv_files/users-10k.csv'),
+            'CSV 100K Users' => public_path('csv_files/users-100k.csv'),
+            'CSV 1M Users' => public_path('csv_files/users-1m.csv'),
+            'CSV 2M Users' => public_path('csv_files/users-2m.csv'),
+        };
+    }
+
+    protected function startBenchmark(string $table = 'users'): void
+    {
+        $this->startRowCount = DB::table($table)->count();
+        $this->benchmarkStartTime = microtime(true);
+        $this->benchmarkStartMemory = memory_get_usage();
+        DB::enableQueryLog();
+        $this->startQueries = DB::select("SHOW SESSION STATUS LIKE 'Questions'")[0]->Value;
+    }
+
+    protected function endBenchmark(string $table = 'users'): void
+    {
+        $executionTime = microtime(true) - $this->benchmarkStartTime;
+        $memoryUsage = round((memory_get_usage() - $this->benchmarkStartMemory) / 1024 / 1024, 2);
+        $queriesCount = DB::select("SHOW SESSION STATUS LIKE 'Questions'")[0]->Value - $this->startQueries - 1; // Subtract the Questions query itself
+
+        // Get row count after we've stopped tracking queries
+        $rowDiff = DB::table($table)->count() - $this->startRowCount;
+
+        $formattedTime = match (true) {
+            $executionTime >= 60 => sprintf('%dm %ds', floor($executionTime / 60), $executionTime % 60),
+            $executionTime >= 1 => round($executionTime, 2).'s',
+            default => round($executionTime * 1000).'ms',
+        };
+
+        $this->newLine();
+        $this->line(sprintf(
+            '⚡ <bg=bright-blue;fg=black> TIME: %s </> <bg=bright-green;fg=black> MEM: %sMB </> <bg=bright-yellow;fg=black> SQL: %s </> <bg=bright-magenta;fg=black> ROWS: %s </>',
+            $formattedTime,
+            $memoryUsage,
+            number_format($queriesCount),
+            number_format($rowDiff)
+        ));
+        $this->newLine();
+    }
+
+    private function import01BasicOneByOne(string $filePath): void
+    {
+        // Most basic approach - one query per record
+        // 100 130ms / 0.35MB
+        // 1K 549ms / 2MB
+        // 10K 5.7s / 19MB
+        // 100K memory issue (from mapping)
+        // 1M memory issue (from file loading)
+        // conclusion: works but slow and in-efficient
+        collect(file($filePath))
+            ->skip(1)
+            ->map(fn ($line) => str_getcsv($line))
+            ->map(fn ($row) => [
+                'custom_id' => $row[0],
+                'name' => $row[1],
+                'email' => $row[2],
+                'company' => $row[3],
+                'city' => $row[4],
+                'country' => $row[5],
+                'birthday' => $row[6],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])
+            ->each(fn ($user) => User::create($user));
+    }
+
+    private function import02CollectAndInsert(string $filePath): void
+    {
+        // Collect all and single insert
+        // Shows prepared statement limit with large datasets
+        // 100 16ms / 0.05MB
+        // 1K 62ms / 0.57MB
+        // 10K prepared statement issue
+        // 100K memory issue
+        // 1M memory issue
+        // conclusion: prepared statement placeholder issue and memory again
+        $now = now()->format('Y-m-d H:i:s');
+
+        $allUsers = collect(file($filePath))
+            ->skip(1)
+            ->map(fn ($line) => str_getcsv($line))
+            ->map(fn ($row) => [
+                'custom_id' => $row[0],
+                'name' => $row[1],
+                'email' => $row[2],
+                'company' => $row[3],
+                'city' => $row[4],
+                'country' => $row[5],
+                'birthday' => $row[6],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        User::insert($allUsers->all());
+    }
+
+    private function import03CollectAndChunk(string $filePath): void
+    {
+        // Collect all but insert in chunks
+        // Still has memory issues with large files
+        // 100 15ms / 0.05MB
+        // 1K 65ms / 0.57MB
+        // 10K 246ms / 5,7MB
+        // 100K 2.6s / 56.97MB
+        // 1M memory issue (while file loading)
+        // Conclusion super fast till 1M
+        $now = now()->format('Y-m-d H:i:s');
+
+        collect(file($filePath))
+            ->skip(1)
+            ->map(fn ($line) => str_getcsv($line))
+            ->map(fn ($row) => [
+                'custom_id' => $row[0],
+                'name' => $row[1],
+                'email' => $row[2],
+                'company' => $row[3],
+                'city' => $row[4],
+                'country' => $row[5],
+                'birthday' => $row[6],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->chunk(1000)
+            ->each(fn ($chunk) => User::insert($chunk->all()));
+    }
+
+    private function import04LazyCollection(string $filePath): void
+    {
+        // 100 66ms / 0.39MB
+        // 1K 37ms / 1.47MB
+        // 10K 3s / 12MB
+        // 100K 39s / 120MB
+        // 1M memory issue
+        // 2M
+        $now = now()->format('Y-m-d H:i:s');
+
+        LazyCollection::make(function () use ($filePath) {
+            $handle = fopen($filePath, 'r');
+            fgets($handle); // skip header
+
+            while (($line = fgets($handle)) !== false) {
+                yield str_getcsv($line);
+            }
+            fclose($handle);
+        })
+            ->each(function ($row) use ($now) {
+                // Directly insert each row
+                User::insert([
+                    'custom_id' => $row[0],
+                    'name' => $row[1],
+                    'email' => $row[2],
+                    'company' => $row[3],
+                    'city' => $row[4],
+                    'country' => $row[5],
+                    'birthday' => $row[6],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            });
+    }
+
+    private function import05LazyCollectionWithChunking(string $filePath): void
+    {
+        // Lazy loading with chunking
+        // 100 16ms / 0.28MB
+        // 1K 61ms / 0.8MB
+        // 10K 275ms / 5.93MB
+        // 100K 1.7s / 57MB
+        // 1M memory issue if not tuned properly
+        $now = now()->format('Y-m-d H:i:s');
+        $chunkSize = 1000; // Define your chunk size
+
+        LazyCollection::make(function () use ($filePath) {
+            $handle = fopen($filePath, 'r');
+            fgets($handle); // skip header
+
+            while (($line = fgets($handle)) !== false) {
+                yield str_getcsv($line);
+            }
+            fclose($handle);
+        })
+            ->map(fn ($row) => [
+                'custom_id' => $row[0],
+                'name' => $row[1],
+                'email' => $row[2],
+                'company' => $row[3],
+                'city' => $row[4],
+                'country' => $row[5],
+                'birthday' => $row[6],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->chunk($chunkSize)
+            ->each(fn ($chunk) => User::insert($chunk->all()));
+    }
+
+    private function import06LazyCollectionWithChunkingAndPdo(string $filePath): void
+    {
+        // 100 10ms / 0.23MB
+        // 1K 51ms / 0.23MB
+        // 10K 234ms / 0.23MB
+        // 100K 2s / 0.23MB
+        // 1M 20s / 0.23MB
+        $now = now()->format('Y-m-d H:i:s');
+        $pdo = DB::connection()->getPdo();
+
+        LazyCollection::make(function () use ($filePath) {
+            $handle = fopen($filePath, 'rb');
+            fgetcsv($handle); // skip header
+
+            while (($line = fgetcsv($handle)) !== false) {
+                yield $line;
+            }
+            fclose($handle);
+        })
+            ->filter(fn ($row) => filter_var($row[2], FILTER_VALIDATE_EMAIL))  // Nice filtering syntax
+            ->chunk(1000)
+            ->each(function ($chunk) use ($pdo, $now) {
+                // Build SQL for this chunk
+                $placeholders = rtrim(str_repeat('(?,?,?,?,?,?,?,?,?),', $chunk->count()), ',');
+                $sql = 'INSERT INTO users (custom_id, name, email, company, city, country, birthday, created_at, updated_at)
+                VALUES '.$placeholders;
+
+                // Prepare values
+                $values = $chunk->flatMap(fn ($row) => [
+                    $row[0], $row[1], $row[2], $row[3], $row[4],
+                    $row[5], $row[6], $now, $now,
+                ])->all();
+
+                $pdo->prepare($sql)->execute($values);
+            });
+    }
+
+    private function import07ManualStreaming(string $filePath): void
+    {
+        // Read and insert in chunks
+        // Better memory management
+        // 100 13ms / 0.05MB
+        // 1K 39ms / 0.57MB
+        // 10K 224ms / 5.69MB
+        // 100K 1.8s / 56MB
+        // 1M memory issue
+
+        $data = [];
+        $handle = fopen($filePath, 'rb');
+        fgetcsv($handle); // skip header
+        $now = now()->format('Y-m-d H:i:s');
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $data[] = [
+                'custom_id' => $row[0],
+                'name' => $row[1],
+                'email' => $row[2],
+                'company' => $row[3],
+                'city' => $row[4],
+                'country' => $row[5],
+                'birthday' => $row[6],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if (count($data) === 1000) {
+                User::insert($data);
+                $data = [];
+            }
+        }
+
+        if (! empty($data)) {
+            User::insert($data);
+        }
+
+        fclose($handle);
+    }
+
+    private function import08ManualStreamingWithPdo(string $filePath): void
+    {
+        // 100 7ms / 0MB
+        // 1K 78ms / 0MB
+        // 10K 328ms / 0MB
+        // 100K 2.9s / 0MB
+        // 1M 28s / 0MB
+        $data = [];
+        $handle = fopen($filePath, 'rb');
+        fgetcsv($handle); // skip header
+        $now = now()->format('Y-m-d H:i:s');
+        $pdo = DB::connection()->getPdo();
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $data[] = [
+                'custom_id' => $row[0],
+                'name' => $row[1],
+                'email' => $row[2],
+                'company' => $row[3],
+                'city' => $row[4],
+                'country' => $row[5],
+                'birthday' => $row[6],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if (count($data) === 1000) {
+                // Build the SQL query for the chunk
+                $columns = array_keys($data[0]);
+                $placeholders = rtrim(str_repeat('(?,?,?,?,?,?,?,?,?),', count($data)), ',');
+
+                $sql = 'INSERT INTO users ('.implode(',', $columns).') VALUES '.$placeholders;
+
+                // Flatten the data array for the query
+                $values = [];
+                foreach ($data as $row) {
+                    $values = array_merge($values, array_values($row));
+                }
+
+                $pdo->prepare($sql)->execute($values);
+                $data = [];
+            }
+        }
+
+        if (! empty($data)) {
+            $columns = array_keys($data[0]);
+            $placeholders = rtrim(str_repeat('(?,?,?,?,?,?,?,?,?),', count($data)), ',');
+
+            $sql = 'INSERT INTO users ('.implode(',', $columns).') VALUES '.$placeholders;
+
+            $values = [];
+            foreach ($data as $row) {
+                $values = array_merge($values, array_values($row));
+            }
+
+            $pdo->prepare($sql)->execute($values);
+        }
+
+        fclose($handle);
+    }
+
+    private function import09PDOPrepared(string $filePath): void
+    {
+        // Direct database connection with prepared statements
+        // 100 41ms / 0 MB
+        // 1K 237ms /
+        // 10K 2.21s
+        // 100K 25.27s
+        // 1M 4m43s
+        // 2M
+        $now = now()->format('Y-m-d H:i:s');
+        $handle = fopen($filePath, 'r');
+        fgets($handle); // skip header
+
+        try {
+            $pdo = DB::connection()->getPdo();
+            $stmt = $pdo->prepare('
+            INSERT INTO users (custom_id, name, email, company, city, country, birthday, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ');
+
+            while (($row = fgetcsv($handle)) !== false) {
+                $stmt->execute([
+                    $row[0],
+                    $row[1],
+                    $row[2],
+                    $row[3],
+                    $row[4],
+                    $row[5],
+                    $row[6],
+                    $now,
+                    $now,
+                ]);
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    private function import10PDOPreparedChunked(string $filePath): void
+    {
+        // Direct database connection with prepared statements
+        // 100 12ms / 0.15MB
+        // 1K 49ms / 0.74MB
+        // 10K 222ms / 0.74MB
+        // 100K 1.5s / 0.74MB
+        // 1M 15.3s / 0.74MB
+        // 2M 24s / 0.74MN
+        $now = now()->format('Y-m-d H:i:s');
+        $handle = fopen($filePath, 'r');
+        fgetcsv($handle); // skip header
+        $chunkSize = 500;
+        $chunks = [];
+
+        try {
+            $stmt = $this->prepareChunkedStatement($chunkSize);
+
+            while (($row = fgetcsv($handle)) !== false) {
+                $chunks = array_merge($chunks, [
+                    $row[0], $row[1], $row[2], $row[3], $row[4],
+                    $row[5], $row[6], $now, $now,
+                ]);
+
+                if (count($chunks) === $chunkSize * 9) {  // 9 columns
+                    $stmt->execute($chunks);
+                    $chunks = [];
+                }
+            }
+
+            // Handle remaining records
+            if (! empty($chunks)) {
+                $remainingRows = count($chunks) / 9;
+                $stmt = $this->prepareChunkedStatement($remainingRows);
+                $stmt->execute($chunks);
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    private function import11Concurrent(string $filePath): void
+    {
+        // 100 168ms
+        // 1K 172ms
+        // 10K 234ms
+        // 100K 595ms
+        // 1M 4.36s
+        // 2M 8.8s
+        $now = now()->format('Y-m-d H:i:s');
+        $numberOfProcesses = 10;
+
+        $tasks = [];
+        for ($i = 0; $i < $numberOfProcesses; $i++) {
+            $tasks[] = function () use ($filePath, $i, $numberOfProcesses, $now) {
+                DB::reconnect();
+
+                $handle = fopen($filePath, 'r');
+                fgets($handle); // Skip header
+                $currentLine = 0;
+                $users = [];
+
+                while (($line = fgets($handle)) !== false) {
+                    // Each process takes every Nth line
+                    if ($currentLine++ % $numberOfProcesses !== $i) {
+                        continue;
+                    }
+
+                    $row = str_getcsv($line);
+                    $users[] = [
+                        'custom_id' => $row[0],
+                        'name' => $row[1],
+                        'email' => $row[2],
+                        'company' => $row[3],
+                        'city' => $row[4],
+                        'country' => $row[5],
+                        'birthday' => $row[6],
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+
+                    if (count($users) === 1000) {
+                        DB::table('users')->insert($users);
+                        $users = [];
+                    }
+                }
+
+                if (! empty($users)) {
+                    DB::table('users')->insert($users);
+                }
+
+                fclose($handle);
+
+                return true;
+            };
+        }
+
+        Concurrency::run($tasks);
+
+    }
+
+    private function import12LoadDataInfile(string $filePath): void
+    {
+        // MySQL specific, fastest approach
+        // 100 10ms / 0MB
+        // 1K 29ms / 0MB
+        // 10K 115ms / 0MB
+        // 100K 567ms / 0MB
+        // 1M 5s / 0MB
+        // 2M 11s / 0MB
+        $pdo = DB::connection()->getPdo();
+        $pdo->setAttribute(PDO::MYSQL_ATTR_LOCAL_INFILE, true);
+
+        $filepath = str_replace('\\', '/', $filePath);
+
+        $query = <<<SQL
+    LOAD DATA LOCAL INFILE '$filepath'
+    INTO TABLE users
+    FIELDS TERMINATED BY ','
+    ENCLOSED BY '"'
+    LINES TERMINATED BY '\n'
+    IGNORE 1 LINES
+    (@col1, @col2, @col3, @col4, @col5, @col6, @col7)
+    SET
+        custom_id = @col1,
+        name = @col2,
+        email = @col3,
+        company = @col4,
+        city = @col5,
+        country = @col6,
+        birthday = @col7,
+        created_at = NOW(),
+        updated_at = NOW()
+    SQL;
+
+        $pdo->exec($query);
+    }
+
+    private function prepareChunkedStatement($chunkSize): PDOStatement
+    {
+        $rowPlaceholders = '(?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $placeholders = implode(',', array_fill(0, $chunkSize, $rowPlaceholders));
+
+        return DB::connection()->getPdo()->prepare("
+        INSERT INTO users (custom_id, name, email, company, city, country, birthday, created_at, updated_at)
+        VALUES {$placeholders}
+    ");
+    }
+}
