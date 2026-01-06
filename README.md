@@ -90,6 +90,8 @@ The native MySQL load strategy also needs `local_infile` enabled on the database
 ./vendor/bin/sail artisan import:users-data
 ```
 
+You can pass the same benchmark options through Sail, for example `./vendor/bin/sail artisan import:users-data --benchmark-log=storage/logs/sail-benchmark.log`.
+
 ## Troubleshooting Bulk Imports
 
 - **`LOAD DATA LOCAL INFILE` is rejected:** MySQL may have `local_infile` disabled. Keep `MYSQL_ATTR_LOCAL_INFILE=true` in `.env` and enable the server setting with `SET GLOBAL local_infile = 1;` or the equivalent MySQL configuration.
