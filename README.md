@@ -101,6 +101,7 @@ You can pass the same benchmark options through Sail, for example `./vendor/bin/
 - **`Allowed memory size exhausted`:** Avoid strategies that preload the whole CSV for large datasets. Use streaming, chunked PDO, or the native MySQL load strategy, and start with the smallest dataset to validate setup.
 - **Selected CSV is not readable:** Confirm the dataset exists under `public/csv_files/`, Git LFS has pulled the real file, and the PHP/Sail process can read it.
 - **Benchmark history is not written:** Check write permissions for `storage/logs/`, or pass `--benchmark-log=storage/logs/custom-benchmark.log` to verify a custom path.
+- **Duplicate email constraint errors:** The default `users.email` column is unique. Clean duplicate rows before importing, or adapt experimental strategies to use `INSERT IGNORE` or an upsert pattern.
 
 ## Usage
 
