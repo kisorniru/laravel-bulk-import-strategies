@@ -514,7 +514,7 @@ class CustomersImportCommand extends Command
             $header = fgetcsv($source);
 
             if ($header !== false) {
-                fputcsv($target, array_slice($header, 0, self::EXPECTED_CSV_COLUMNS));
+                fputcsv($target, $this->csvRowForLoadData($header));
             }
 
             while (($row = fgetcsv($source)) !== false) {
