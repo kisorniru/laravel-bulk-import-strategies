@@ -117,10 +117,31 @@ trait ImportHelper
 
     protected function persistBenchmarkSummary(array $summary): void
     {
-        $path = storage_path('logs/benchmark.log');
+        $path = $this->benchmarkLogPath();
+
+        if ($path === null) {
+            return;
+        }
 
         File::ensureDirectoryExists(dirname($path));
         File::append($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL);
+    }
+
+    protected function benchmarkLogPath(): ?string
+    {
+        $path = method_exists($this, 'option') ? $this->option('benchmark-log') : null;
+
+        if ($path === null || $path === '') {
+            return storage_path('logs/benchmark.log');
+        }
+
+        if (in_array(strtolower((string) $path), ['0', 'false', 'off', 'none'], true)) {
+            return null;
+        }
+
+        return str_starts_with((string) $path, DIRECTORY_SEPARATOR)
+            ? (string) $path
+            : base_path((string) $path);
     }
 
     private function import01BasicOneByOne(string $filePath): void
