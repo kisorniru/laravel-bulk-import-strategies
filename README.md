@@ -53,6 +53,25 @@ This command processes CSV files containing user data and inserts the informatio
 
 ## Import Strategies
 
+### Strategy Comparison Table
+
+Below is a detailed comparison of the 12 import strategies implemented in the benchmarking engine:
+
+| Strategy / Method | Memory Behavior | SQL Query Behavior | Best Use Case |
+| :--- | :--- | :--- | :--- |
+| **01. Basic One-by-One** | Extremely high memory overhead due to entire file mapping and Eloquent model instantiations. | Runs $N$ separate SQL write queries. | Small datasets ($<100$ rows) where data validation observers are required. |
+| **02. Collect and Insert** | High memory overhead; loads complete dataset into PHP array. | Single batch SQL insert query. | Small datasets ($<10,000$ rows) to minimize network roundtrips. |
+| **03. Collect and Chunk** | Medium-to-high memory overhead; preloads entire file into memory before chunking. | Executed in batches of 1,000 rows. | Medium datasets ($<100,000$ rows) requiring fast insertion speeds. |
+| **04. Lazy Collection** | Extremely low memory overhead (~0MB delta) utilizing PHP Generator. | Runs $N$ separate row-by-row write queries. | Low-memory environments processing huge files without batching capabilities. |
+| **05. Lazy Chunking** | Low memory overhead; chunks data on-the-fly via generators. | Executes Eloquent inserts in chunks of 1,000. | Standard large imports where Eloquent overhead is tolerable. |
+| **06. Lazy Chunking + PDO** | Exceptionally low memory overhead (~0.23MB delta) with raw connection. | Raw SQL statements executed in chunks of 1,000. | Standard high-volume parsing where Eloquent overhead must be bypassed. |
+| **07. Manual Streaming** | Traditional low-memory profile using stream resource bounds. | Eloquent chunk batch inserts. | Legacy PHP systems not supporting modern Laravel LazyCollections. |
+| **08. Manual Stream + PDO** | Extremely low memory usage with native buffer reading. | Raw SQL queries parsed and executed in chunks of 1,000. | Standard manual streaming when maximum raw performance is desired. |
+| **09. Row-by-Row PDO** | Stable low-memory footprint using a single database statement. | Row-by-row raw SQL writes. | Simple stream processing with prepared raw SQL statements. |
+| **10. PDO Prepared Chunked** | Extremely high performance and minimal memory footprint (~0.74MB delta). | Reuses static sized prepared statement chunk templates. | Maximum throughput raw SQL ingestion ($>1,000,000$ rows). |
+| **11. Concurrent (Fibers)** | High CPU utilization; concurrent PHP child processes. | Parallelized batch inserts. | Multi-core servers requiring lightning-fast parsing via parallel execution. |
+| **12. MySQL Load Infile** | 0MB PHP overhead; bypasses the application layer completely. | Single native database engine ingestion command. | Ultra-large scale CSV ingestion ($>2,000,000$ rows) with configured server permissions. |
+
 ### Basic Approach
 This method reads the entire CSV file into memory and attempts to insert all records at once. While this approach is simple, it can be inefficient for large files and may result in memory exhaustion errors.
 
