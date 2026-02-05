@@ -529,4 +529,9 @@ class CustomersImportCommand extends Command
 
         return $targetPath;
     }
+
+    protected function benchmarkStrategyName(): string
+    {
+        return 'mysql_load_data_local_infile';
+    }
 }

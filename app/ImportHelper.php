@@ -3,6 +3,7 @@
 namespace App;
 
 use App\Models\User;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
@@ -22,6 +23,8 @@ trait ImportHelper
 
     protected int $startQueries;
 
+    protected ?string $benchmarkFilePath = null;
+
     private const PROGRESS_ROW_INTERVAL = 100000;
 
     public function handle(): void
@@ -31,6 +34,7 @@ trait ImportHelper
         $this->chunkSize();
         User::truncate();
         $filePath = $this->selectFile();
+        $this->benchmarkFilePath = $filePath;
         $this->startBenchmark();
 
         try {
@@ -92,6 +96,31 @@ trait ImportHelper
             number_format($rowDiff)
         ));
         $this->newLine();
+
+        $this->persistBenchmarkSummary([
+            'timestamp' => now()->toIso8601String(),
+            'strategy' => $this->benchmarkStrategyName(),
+            'dataset' => $this->benchmarkFilePath ? basename($this->benchmarkFilePath) : null,
+            'file' => $this->benchmarkFilePath,
+            'execution_time_seconds' => round($executionTime, 6),
+            'formatted_time' => $formattedTime,
+            'memory_usage_mb' => $memoryUsage,
+            'sql_queries' => $queriesCount,
+            'inserted_rows' => $rowDiff,
+        ]);
+    }
+
+    protected function benchmarkStrategyName(): string
+    {
+        return class_basename($this);
+    }
+
+    protected function persistBenchmarkSummary(array $summary): void
+    {
+        $path = storage_path('logs/benchmark.log');
+
+        File::ensureDirectoryExists(dirname($path));
+        File::append($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL);
     }
 
     private function import01BasicOneByOne(string $filePath): void
