@@ -116,6 +116,8 @@ TIME: 1.42s MEM: 0.23MB SQL: 104 ROWS: 100,000
 
 Use these numbers as the output format, not as a performance guarantee. Actual results depend on the selected strategy, CSV size, database configuration, and local machine.
 
+Each run also appends a JSON summary line to `storage/logs/benchmark.log` so previous results can be reviewed later. The persisted entry includes the timestamp, strategy name, dataset/file path, execution time, memory usage, SQL query count, and inserted row count.
+
 ## Import Strategies
 
 ### Strategy Comparison Table
