@@ -118,6 +118,8 @@ Use these numbers as the output format, not as a performance guarantee. Actual r
 
 Each run also appends a JSON summary line to `storage/logs/benchmark.log` so previous results can be reviewed later. The persisted entry includes the timestamp, strategy name, dataset/file path, execution time, memory usage, SQL query count, and inserted row count.
 
+Use `--benchmark-log=storage/logs/my-benchmark.log` to write the history elsewhere, or `--benchmark-log=false` to run without writing a benchmark history file.
+
 ## Import Strategies
 
 ### Strategy Comparison Table
