@@ -309,6 +309,7 @@ fclose($handle);
 - Record optional machine metadata with benchmark history for easier comparisons across environments.
 - Add fixture-driven tests for every stream-based strategy that does not require a live MySQL server.
 - Consider a small benchmark report command that summarizes `storage/logs/benchmark.log`.
+- Add optional filters to benchmark reports by strategy, dataset, or date range.
 
 ## Conclusion
 
