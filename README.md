@@ -1,12 +1,10 @@
-Here’s the README content that you can copy and use for your GitHub project:
+# Laravel Bulk Import Strategies
 
-# Customers Data Import Command
-
-This Laravel Artisan command is designed to efficiently import large datasets (e.g., millions of user records) from a CSV file into the database. Several techniques are applied to handle large amounts of data, including chunking, memory management, and database prepared statements.
+This Laravel project is a benchmark playground for comparing CSV import strategies against a `users` table. It focuses on practical tradeoffs for large datasets: memory pressure, SQL query volume, execution time, MySQL bulk-loading requirements, and repeatable local setup.
 
 ## Overview
 
-This command processes CSV files containing user data and inserts the information into the `users` table in a MySQL database. The command includes various approaches to handle memory issues, improve performance, and manage large datasets efficiently.
+The main entry point is the `import:users-data` Artisan command. It prompts for one of the bundled CSV datasets, imports the rows through the active strategy, and prints benchmark telemetry that can be compared across approaches.
 
 ## Features
 
