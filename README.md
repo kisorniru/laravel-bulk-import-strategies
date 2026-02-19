@@ -19,23 +19,22 @@ The main entry point is the `import:users-data` Artisan command. It prompts for 
 1. Clone the repository to your local machine:
 
    ```bash
-   git clone https://github.com/yourusername/repository-name.git
+   git clone https://github.com/kisorniru/laravel-bulk-import-strategies.git
+   cd laravel-bulk-import-strategies
    ```
 
-2. Install the required dependencies using Composer:
+2. Install dependencies and create the local environment file:
 
    ```bash
    composer install
+   cp .env.example .env
+   php artisan key:generate
    ```
 
-3. Add your `.env` database credentials to connect to your MySQL database.
+3. Update `.env` with your MySQL credentials, then run the migrations:
 
-4. Register the command in your `App\Console\Kernel.php` file:
-
-   ```php
-   protected $commands = [
-       \App\Console\Commands\CustomersImportCommand::class,
-   ];
+   ```bash
+   php artisan migrate
    ```
 
 ## Laravel Sail Benchmark Setup
