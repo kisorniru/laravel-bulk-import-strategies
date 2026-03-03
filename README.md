@@ -51,6 +51,18 @@ This command processes CSV files containing user data and inserts the informatio
 
 3. The command will read the CSV file, process the data, and insert the user records into the `users` table.
 
+## Benchmark Output
+
+After each import, the command prints a compact benchmark summary with elapsed time, memory usage, SQL query count, and inserted row count.
+
+Sample output only:
+
+```text
+TIME: 1.42s MEM: 0.23MB SQL: 104 ROWS: 100,000
+```
+
+Use these numbers as the output format, not as a performance guarantee. Actual results depend on the selected strategy, CSV size, database configuration, and local machine.
+
 ## Import Strategies
 
 ### Strategy Comparison Table
