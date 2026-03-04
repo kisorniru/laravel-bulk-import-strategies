@@ -32,8 +32,10 @@ trait ImportHelper
         error_reporting(E_ALL);
         ini_set('display_errors', 1);
         $this->chunkSize();
-        User::truncate();
         $filePath = $this->selectFile();
+        $this->ensureImportFileIsReadable($filePath);
+
+        User::truncate();
         $this->benchmarkFilePath = $filePath;
         $this->startBenchmark();
 
@@ -61,6 +63,13 @@ trait ImportHelper
             'CSV 1M Users' => public_path('csv_files/users-1m.csv'),
             'CSV 2M Users' => public_path('csv_files/users-2m.csv'),
         };
+    }
+
+    protected function ensureImportFileIsReadable(string $filePath): void
+    {
+        if (! File::isFile($filePath) || ! is_readable($filePath)) {
+            throw new \InvalidArgumentException("The selected CSV file is not readable: {$filePath}");
+        }
     }
 
     protected function startBenchmark(string $table = 'users'): void
