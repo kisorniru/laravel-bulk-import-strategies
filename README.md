@@ -6,6 +6,12 @@ This Laravel project is a benchmark playground for comparing CSV import strategi
 
 The main entry point is the `import:users-data` Artisan command. It prompts for one of the bundled CSV datasets, imports the rows through the active strategy, and prints benchmark telemetry that can be compared across approaches.
 
+Primary goals:
+
+- Compare import strategies with the same datasets and telemetry shape.
+- Keep local setup reproducible for MySQL and Laravel Sail.
+- Preserve the older strategies as readable reference implementations.
+
 ## Features
 
 - Handles large CSV files with millions of rows.
