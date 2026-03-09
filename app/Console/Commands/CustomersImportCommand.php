@@ -518,7 +518,7 @@ class CustomersImportCommand extends Command
             }
 
             while (($row = fgetcsv($source)) !== false) {
-                if (count($row) < self::EXPECTED_CSV_COLUMNS) {
+                if (! $this->hasExpectedCsvColumns($row)) {
                     continue;
                 }
 
@@ -530,6 +530,11 @@ class CustomersImportCommand extends Command
         }
 
         return $targetPath;
+    }
+
+    private function hasExpectedCsvColumns(array $row): bool
+    {
+        return count($row) >= self::EXPECTED_CSV_COLUMNS;
     }
 
     protected function benchmarkStrategyName(): string
