@@ -33,6 +33,7 @@ Primary goals:
 
    ```bash
    composer install
+   npm install
    cp .env.example .env
    php artisan key:generate
    ```
@@ -41,6 +42,12 @@ Primary goals:
 
    ```bash
    php artisan migrate
+   ```
+
+4. Download the real CSV datasets if your checkout has Git LFS pointer files:
+
+   ```bash
+   git lfs pull
    ```
 
 ## Laravel Sail Benchmark Setup
