@@ -74,6 +74,10 @@ trait ImportHelper
         if (! File::isFile($filePath) || ! is_readable($filePath)) {
             throw new \InvalidArgumentException("The selected CSV file is not readable: {$filePath}");
         }
+
+        if (File::size($filePath) === 0) {
+            throw new \InvalidArgumentException("The selected CSV file is empty: {$filePath}");
+        }
     }
 
     protected function startBenchmark(string $table = 'users'): void
