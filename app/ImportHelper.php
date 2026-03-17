@@ -25,6 +25,8 @@ trait ImportHelper
 
     protected ?string $benchmarkFilePath = null;
 
+    private const DEFAULT_CHUNK_SIZE = 1000;
+
     private const PROGRESS_ROW_INTERVAL = 100000;
 
     public function handle(): void
@@ -684,7 +686,7 @@ trait ImportHelper
     ");
     }
 
-    protected function chunkSize(int $default = 1000): int
+    protected function chunkSize(int $default = self::DEFAULT_CHUNK_SIZE): int
     {
         if (! method_exists($this, 'option')) {
             return $default;

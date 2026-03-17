@@ -24,7 +24,7 @@ class CustomersImportCommand extends Command
      * @var string
      */
     protected $signature = 'import:users-data
-        {--chunk-size= : Number of rows per batch for chunk-based import strategies}
+        {--chunk-size= : Number of rows per batch for chunk-based import strategies, defaults to 1000}
         {--benchmark-log= : Path for benchmark JSON lines, or "false" to disable}';
 
     /**
