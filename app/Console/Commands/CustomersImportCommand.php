@@ -534,7 +534,10 @@ class CustomersImportCommand extends Command
 
     private function hasExpectedCsvColumns(array $row): bool
     {
-        return ! $this->isEmptyCsvRow($row) && count($row) >= self::EXPECTED_CSV_COLUMNS;
+        return ! $this->isEmptyCsvRow($row)
+            && count($row) >= self::EXPECTED_CSV_COLUMNS
+            && trim((string) $row[0]) !== ''
+            && trim((string) $row[1]) !== '';
     }
 
     private function csvRowForLoadData(array $row): array
