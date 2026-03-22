@@ -36,6 +36,7 @@ trait ImportHelper
         $this->chunkSize();
         $filePath = $this->selectFile();
         $this->ensureImportFileIsReadable($filePath);
+        $this->info('Selected dataset: '.basename($filePath));
 
         User::truncate();
         $this->benchmarkFilePath = $filePath;
