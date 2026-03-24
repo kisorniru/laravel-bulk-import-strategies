@@ -40,6 +40,45 @@ This command processes CSV files containing user data and inserts the informatio
    ];
    ```
 
+## Laravel Sail Benchmark Setup
+
+This repository uses MySQL for the main benchmark path. If `docker-compose.yml` is not present locally, generate the Sail stack with MySQL first:
+
+```bash
+composer install
+php artisan sail:install --with=mysql
+cp .env.example .env
+```
+
+For Sail, update `.env` so Laravel connects to the MySQL container:
+
+```dotenv
+DB_HOST=mysql
+DB_DATABASE=import_million_rows
+MYSQL_ATTR_LOCAL_INFILE=true
+```
+
+Then start Sail, prepare the app, and run migrations:
+
+```bash
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan key:generate
+./vendor/bin/sail artisan migrate
+```
+
+The CSV files are tracked with Git LFS, so pull the real datasets before benchmarking:
+
+```bash
+git lfs pull
+```
+
+The native MySQL load strategy also needs `local_infile` enabled on the database server. For a local Sail container, enable it before running the benchmark:
+
+```bash
+./vendor/bin/sail mysql -e "SET GLOBAL local_infile = 1;"
+./vendor/bin/sail artisan import:users-data
+```
+
 ## Usage
 
 1. Place your CSV file in a directory accessible by the Laravel application.
