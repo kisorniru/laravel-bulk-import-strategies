@@ -703,9 +703,9 @@ trait ImportHelper
             return $default;
         }
 
-        $value = $this->option('chunk-size');
+        $value = trim((string) $this->option('chunk-size'));
 
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return $default;
         }
 
