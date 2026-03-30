@@ -37,6 +37,7 @@ trait ImportHelper
         $filePath = $this->selectFile();
         $this->ensureImportFileIsReadable($filePath);
         $this->info('Selected dataset: '.basename($filePath));
+        $this->info('Import strategy: '.$this->benchmarkStrategyName());
 
         User::truncate();
         $this->benchmarkFilePath = $filePath;
