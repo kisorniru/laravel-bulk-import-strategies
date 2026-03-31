@@ -79,6 +79,14 @@ The native MySQL load strategy also needs `local_infile` enabled on the database
 ./vendor/bin/sail artisan import:users-data
 ```
 
+## Troubleshooting Bulk Imports
+
+- **`LOAD DATA LOCAL INFILE` is rejected:** MySQL may have `local_infile` disabled. Keep `MYSQL_ATTR_LOCAL_INFILE=true` in `.env` and enable the server setting with `SET GLOBAL local_infile = 1;` or the equivalent MySQL configuration.
+- **CSV imports only a few strange rows:** The CSV files may still be Git LFS pointer files. Run `git lfs pull` and confirm files in `public/csv_files/` are full datasets, not small pointer text files.
+- **`Unknown column 'custom_id'`:** Some experimental helper strategies insert a `custom_id` field, but the default users migration may not include it. Add the column in the schema or use a strategy/query that matches the current table.
+- **Rows are missing after import:** The active load-file path skips malformed CSV rows that do not contain the expected columns. Check the source CSV for short or broken lines before comparing row totals.
+- **`Allowed memory size exhausted`:** Avoid strategies that preload the whole CSV for large datasets. Use streaming, chunked PDO, or the native MySQL load strategy, and start with the smallest dataset to validate setup.
+
 ## Usage
 
 1. Place your CSV file in a directory accessible by the Laravel application.
