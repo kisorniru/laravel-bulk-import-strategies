@@ -153,7 +153,7 @@ trait ImportHelper
         }
 
         File::ensureDirectoryExists(dirname($path));
-        File::append($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL);
+        file_put_contents($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 
     protected function benchmarkLogPath(): ?string
