@@ -96,6 +96,12 @@ The native MySQL load strategy also needs `local_infile` enabled on the database
    php artisan import:users-data /path/to/your/csvfile.csv
    ```
 
+   For chunk-based strategies, tune the batch size without editing source code:
+
+   ```bash
+   php artisan import:users-data --chunk-size=500
+   ```
+
 3. The command will read the CSV file, process the data, and insert the user records into the `users` table.
 
 ## Benchmark Output

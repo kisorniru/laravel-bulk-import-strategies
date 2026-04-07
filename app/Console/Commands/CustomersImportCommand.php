@@ -23,7 +23,7 @@ class CustomersImportCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'import:users-data';
+    protected $signature = 'import:users-data {--chunk-size= : Number of rows per batch for chunk-based import strategies}';
 
     /**
      * The console command description.
