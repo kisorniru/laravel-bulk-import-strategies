@@ -178,7 +178,12 @@ trait ImportHelper
         }
 
         File::ensureDirectoryExists(dirname($path));
-        file_put_contents($path, json_encode($summary, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL, FILE_APPEND | LOCK_EX);
+        file_put_contents($path, $this->benchmarkSummaryJsonLine($summary), FILE_APPEND | LOCK_EX);
+    }
+
+    protected function benchmarkSummaryJsonLine(array $summary): string
+    {
+        return json_encode($summary, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
     }
 
     protected function benchmarkLogPath(): ?string
