@@ -36,7 +36,7 @@ trait ImportHelper
         $this->chunkSize();
         $filePath = $this->selectFile();
         $this->ensureImportFileIsReadable($filePath);
-        $this->info('Selected dataset: '.basename($filePath));
+        $this->info(sprintf('Selected dataset: %s (%s)', basename($filePath), $this->formatFileSize($filePath)));
         $this->info('Import strategy: '.$this->benchmarkStrategyName());
 
         User::truncate();
@@ -78,6 +78,17 @@ trait ImportHelper
         if (File::size($filePath) === 0) {
             throw new \InvalidArgumentException("The selected CSV file is empty: {$filePath}");
         }
+    }
+
+    protected function formatFileSize(string $filePath): string
+    {
+        $bytes = File::size($filePath);
+
+        if ($bytes >= 1024 * 1024) {
+            return round($bytes / 1024 / 1024, 2).' MB';
+        }
+
+        return round($bytes / 1024, 2).' KB';
     }
 
     protected function startBenchmark(string $table = 'users'): void
