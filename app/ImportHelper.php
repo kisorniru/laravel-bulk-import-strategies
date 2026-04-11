@@ -134,7 +134,7 @@ trait ImportHelper
         return [
             'timestamp' => now()->toIso8601String(),
             'strategy' => $this->benchmarkStrategyName(),
-            'dataset' => $this->benchmarkFilePath ? basename($this->benchmarkFilePath) : null,
+            'dataset' => $this->benchmarkDatasetName(),
             'file' => $this->benchmarkFilePath,
             'execution_time_seconds' => round($executionTime, 6),
             'formatted_time' => $formattedTime,
@@ -142,6 +142,11 @@ trait ImportHelper
             'sql_queries' => $queriesCount,
             'inserted_rows' => $insertedRows,
         ];
+    }
+
+    protected function benchmarkDatasetName(): ?string
+    {
+        return $this->benchmarkFilePath ? basename($this->benchmarkFilePath) : null;
     }
 
     protected function persistBenchmarkSummary(array $summary): void
