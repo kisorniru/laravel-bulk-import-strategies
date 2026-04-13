@@ -37,7 +37,7 @@ trait ImportHelper
         $filePath = $this->selectFile();
         $this->ensureImportFileIsReadable($filePath);
         $this->info(sprintf('Selected dataset: %s (%s)', basename($filePath), $this->formatFileSize($filePath)));
-        $this->info('Import strategy: '.$this->benchmarkStrategyName());
+        $this->info('Import strategy: '.$this->benchmarkStrategyLabel());
 
         User::truncate();
         $this->benchmarkFilePath = $filePath;
@@ -137,6 +137,11 @@ trait ImportHelper
     protected function benchmarkStrategyName(): string
     {
         return class_basename($this);
+    }
+
+    protected function benchmarkStrategyLabel(): string
+    {
+        return Str::of($this->benchmarkStrategyName())->replace('_', ' ')->title()->value();
     }
 
     protected function benchmarkSummary(
