@@ -117,6 +117,12 @@ Each run also appends a JSON summary line to `storage/logs/benchmark.log` so pre
 
 Use `--benchmark-log=storage/logs/my-benchmark.log` to write the history elsewhere, or `--benchmark-log=false` to run without writing a benchmark history file.
 
+Example history entry only:
+
+```json
+{"timestamp":"2026-02-05T19:14:00+06:00","strategy":"mysql_load_data_local_infile","dataset":"users-100.csv","file":"/path/to/public/csv_files/users-100.csv","execution_time_seconds":1.423456,"formatted_time":"1.42s","memory_usage_mb":0.23,"sql_queries":104,"inserted_rows":100}
+```
+
 ## Import Strategies
 
 ### Strategy Comparison Table
