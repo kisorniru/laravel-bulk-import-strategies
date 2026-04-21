@@ -144,6 +144,8 @@ Below is a detailed comparison of the 12 import strategies implemented in the be
 | **11. Concurrent (Fibers)** | High CPU utilization; concurrent PHP child processes. | Parallelized batch inserts. | Multi-core servers requiring lightning-fast parsing via parallel execution. |
 | **12. MySQL Load Infile** | 0MB PHP overhead; bypasses the application layer completely. | Single native database engine ingestion command. | Ultra-large scale CSV ingestion ($>2,000,000$ rows) with configured server permissions. |
 
+Use the table to choose a strategy by bottleneck: memory-constrained environments should start with streaming approaches, while MySQL-only throughput tests should validate `LOAD DATA LOCAL INFILE` setup first.
+
 ### Basic Approach
 This method reads the entire CSV file into memory and attempts to insert all records at once. While this approach is simple, it can be inefficient for large files and may result in memory exhaustion errors.
 
