@@ -124,6 +124,8 @@ After each import, the command prints a compact benchmark summary with elapsed t
 Sample output only:
 
 ```text
+Selected dataset: users-100.csv (10.84 KB)
+Import strategy: Mysql Load Data Local Infile
 TIME: 1.42s MEM: 0.23MB SQL: 104 ROWS: 100,000
 ```
 
