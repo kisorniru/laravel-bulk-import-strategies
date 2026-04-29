@@ -11,6 +11,7 @@ test('it skips malformed rows when preparing load data file', function () {
         'Jane Doe,jane@example.com,Acme,Dhaka,Bangladesh,1992-05-15',
         'Missing Columns,missing@example.com,Acme',
         'John Doe,john@example.com,Beta,Chittagong,Bangladesh,1990-01-01',
+        'Trailing Bad Row,trailing@example.com',
     ])."\n");
 
     try {
