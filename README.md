@@ -164,6 +164,8 @@ Below is a detailed comparison of the 12 import strategies implemented in the be
 
 Use the table to choose a strategy by bottleneck: memory-constrained environments should start with streaming approaches, while MySQL-only throughput tests should validate `LOAD DATA LOCAL INFILE` setup first.
 
+Strategies that reference `custom_id` are kept for experimentation and may need a matching schema column before they can be run unchanged.
+
 ### Basic Approach
 This method reads the entire CSV file into memory and attempts to insert all records at once. While this approach is simple, it can be inefficient for large files and may result in memory exhaustion errors.
 
