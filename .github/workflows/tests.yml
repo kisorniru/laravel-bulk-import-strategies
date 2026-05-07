@@ -7,6 +7,7 @@ on:
 jobs:
   pest:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -18,6 +19,9 @@ jobs:
           php-version: '8.2'
           extensions: dom, fileinfo, mbstring, pdo_sqlite, sqlite3
           coverage: none
+
+      - name: Validate Composer manifest
+        run: composer validate --strict --no-check-publish
 
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
