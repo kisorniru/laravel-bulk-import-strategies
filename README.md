@@ -61,6 +61,7 @@ Then start Sail, prepare the app, and run migrations:
 ./vendor/bin/sail up -d
 ./vendor/bin/sail artisan key:generate
 ./vendor/bin/sail artisan migrate
+./vendor/bin/sail artisan about
 ```
 
 The CSV files are tracked with Git LFS, so pull the real datasets before benchmarking:
