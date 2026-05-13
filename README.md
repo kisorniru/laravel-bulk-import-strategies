@@ -84,6 +84,8 @@ The native MySQL load strategy also needs `local_infile` enabled on the database
 - **`Unknown column 'custom_id'`:** Some experimental helper strategies insert a `custom_id` field, but the default users migration may not include it. Add the column in the schema or use a strategy/query that matches the current table.
 - **Rows are missing after import:** The active load-file path skips malformed CSV rows that do not contain the expected columns. Check the source CSV for short or broken lines before comparing row totals.
 - **`Allowed memory size exhausted`:** Avoid strategies that preload the whole CSV for large datasets. Use streaming, chunked PDO, or the native MySQL load strategy, and start with the smallest dataset to validate setup.
+- **Selected CSV is not readable:** Confirm the dataset exists under `public/csv_files/`, Git LFS has pulled the real file, and the PHP/Sail process can read it.
+- **Benchmark history is not written:** Check write permissions for `storage/logs/`, or pass `--benchmark-log=storage/logs/custom-benchmark.log` to verify a custom path.
 
 ## Usage
 
