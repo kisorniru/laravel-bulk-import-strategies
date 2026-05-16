@@ -522,7 +522,7 @@ class CustomersImportCommand extends Command
                     continue;
                 }
 
-                fputcsv($target, array_slice($row, 0, self::EXPECTED_CSV_COLUMNS));
+                fputcsv($target, $this->csvRowForLoadData($row));
             }
         } finally {
             fclose($source);
@@ -535,6 +535,11 @@ class CustomersImportCommand extends Command
     private function hasExpectedCsvColumns(array $row): bool
     {
         return count($row) >= self::EXPECTED_CSV_COLUMNS;
+    }
+
+    private function csvRowForLoadData(array $row): array
+    {
+        return array_slice($row, 0, self::EXPECTED_CSV_COLUMNS);
     }
 
     protected function benchmarkStrategyName(): string
