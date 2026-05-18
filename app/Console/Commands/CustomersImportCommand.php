@@ -534,12 +534,17 @@ class CustomersImportCommand extends Command
 
     private function hasExpectedCsvColumns(array $row): bool
     {
-        return count($row) >= self::EXPECTED_CSV_COLUMNS;
+        return ! $this->isEmptyCsvRow($row) && count($row) >= self::EXPECTED_CSV_COLUMNS;
     }
 
     private function csvRowForLoadData(array $row): array
     {
         return array_slice($row, 0, self::EXPECTED_CSV_COLUMNS);
+    }
+
+    private function isEmptyCsvRow(array $row): bool
+    {
+        return count($row) === 1 && trim((string) ($row[0] ?? '')) === '';
     }
 
     protected function benchmarkStrategyName(): string
