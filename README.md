@@ -283,6 +283,13 @@ fclose($handle);
 - **Prepared Statements:** Using prepared statements helps improve performance and reduces the risk of SQL injection.
 - **Database Indexing:** Ensure that your database tables are properly indexed to speed up insertions.
 
+## Roadmap
+
+- Add a first-class strategy selector so the documented approaches can be run without editing source code.
+- Record optional machine metadata with benchmark history for easier comparisons across environments.
+- Add fixture-driven tests for every stream-based strategy that does not require a live MySQL server.
+- Consider a small benchmark report command that summarizes `storage/logs/benchmark.log`.
+
 ## Conclusion
 
 This command provides an efficient way to import large datasets into the database with minimal memory usage. By using chunking and prepared statements, it ensures that even millions of records can be inserted without running into memory exhaustion issues.
