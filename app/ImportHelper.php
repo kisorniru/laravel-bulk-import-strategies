@@ -22,10 +22,13 @@ trait ImportHelper
 
     protected int $startQueries;
 
+    private const PROGRESS_ROW_INTERVAL = 100000;
+
     public function handle(): void
     {
         error_reporting(E_ALL);
         ini_set('display_errors', 1);
+        $this->chunkSize();
         User::truncate();
         $filePath = $this->selectFile();
         $this->startBenchmark();
@@ -158,6 +161,8 @@ trait ImportHelper
         // 1M memory issue (while file loading)
         // Conclusion super fast till 1M
         $now = now()->format('Y-m-d H:i:s');
+        $chunkSize = $this->chunkSize();
+        $processedRows = 0;
 
         collect(file($filePath))
             ->skip(1)
@@ -173,8 +178,12 @@ trait ImportHelper
                 'created_at' => $now,
                 'updated_at' => $now,
             ])
-            ->chunk(1000)
-            ->each(fn ($chunk) => User::insert($chunk->all()));
+            ->chunk($chunkSize)
+            ->each(function ($chunk) use (&$processedRows) {
+                User::insert($chunk->all());
+                $processedRows += $chunk->count();
+                $this->reportChunkProgress($processedRows);
+            });
     }
 
     private function import04LazyCollection(string $filePath): void
@@ -221,7 +230,8 @@ trait ImportHelper
         // 100K 1.7s / 57MB
         // 1M memory issue if not tuned properly
         $now = now()->format('Y-m-d H:i:s');
-        $chunkSize = 1000; // Define your chunk size
+        $chunkSize = $this->chunkSize();
+        $processedRows = 0;
 
         LazyCollection::make(function () use ($filePath) {
             $handle = fopen($filePath, 'r');
@@ -244,7 +254,11 @@ trait ImportHelper
                 'updated_at' => $now,
             ])
             ->chunk($chunkSize)
-            ->each(fn ($chunk) => User::insert($chunk->all()));
+            ->each(function ($chunk) use (&$processedRows) {
+                User::insert($chunk->all());
+                $processedRows += $chunk->count();
+                $this->reportChunkProgress($processedRows);
+            });
     }
 
     private function import06LazyCollectionWithChunkingAndPdo(string $filePath): void
@@ -256,6 +270,8 @@ trait ImportHelper
         // 1M 20s / 0.23MB
         $now = now()->format('Y-m-d H:i:s');
         $pdo = DB::connection()->getPdo();
+        $chunkSize = $this->chunkSize();
+        $processedRows = 0;
 
         LazyCollection::make(function () use ($filePath) {
             $handle = fopen($filePath, 'rb');
@@ -267,8 +283,8 @@ trait ImportHelper
             fclose($handle);
         })
             ->filter(fn ($row) => filter_var($row[2], FILTER_VALIDATE_EMAIL))  // Nice filtering syntax
-            ->chunk(1000)
-            ->each(function ($chunk) use ($pdo, $now) {
+            ->chunk($chunkSize)
+            ->each(function ($chunk) use ($pdo, $now, &$processedRows) {
                 // Build SQL for this chunk
                 $placeholders = rtrim(str_repeat('(?,?,?,?,?,?,?,?,?),', $chunk->count()), ',');
                 $sql = 'INSERT INTO users (custom_id, name, email, company, city, country, birthday, created_at, updated_at)
@@ -281,6 +297,8 @@ trait ImportHelper
                 ])->all();
 
                 $pdo->prepare($sql)->execute($values);
+                $processedRows += $chunk->count();
+                $this->reportChunkProgress($processedRows);
             });
     }
 
@@ -298,6 +316,8 @@ trait ImportHelper
         $handle = fopen($filePath, 'rb');
         fgetcsv($handle); // skip header
         $now = now()->format('Y-m-d H:i:s');
+        $chunkSize = $this->chunkSize();
+        $processedRows = 0;
 
         while (($row = fgetcsv($handle)) !== false) {
             $data[] = [
@@ -312,14 +332,18 @@ trait ImportHelper
                 'updated_at' => $now,
             ];
 
-            if (count($data) === 1000) {
+            if (count($data) === $chunkSize) {
                 User::insert($data);
+                $processedRows += count($data);
+                $this->reportChunkProgress($processedRows);
                 $data = [];
             }
         }
 
         if (! empty($data)) {
             User::insert($data);
+            $processedRows += count($data);
+            $this->reportChunkProgress($processedRows);
         }
 
         fclose($handle);
@@ -337,6 +361,8 @@ trait ImportHelper
         fgetcsv($handle); // skip header
         $now = now()->format('Y-m-d H:i:s');
         $pdo = DB::connection()->getPdo();
+        $chunkSize = $this->chunkSize();
+        $processedRows = 0;
 
         while (($row = fgetcsv($handle)) !== false) {
             $data[] = [
@@ -351,7 +377,7 @@ trait ImportHelper
                 'updated_at' => $now,
             ];
 
-            if (count($data) === 1000) {
+            if (count($data) === $chunkSize) {
                 // Build the SQL query for the chunk
                 $columns = array_keys($data[0]);
                 $placeholders = rtrim(str_repeat('(?,?,?,?,?,?,?,?,?),', count($data)), ',');
@@ -365,6 +391,8 @@ trait ImportHelper
                 }
 
                 $pdo->prepare($sql)->execute($values);
+                $processedRows += count($data);
+                $this->reportChunkProgress($processedRows);
                 $data = [];
             }
         }
@@ -381,6 +409,8 @@ trait ImportHelper
             }
 
             $pdo->prepare($sql)->execute($values);
+            $processedRows += count($data);
+            $this->reportChunkProgress($processedRows);
         }
 
         fclose($handle);
@@ -436,8 +466,9 @@ trait ImportHelper
         $now = now()->format('Y-m-d H:i:s');
         $handle = fopen($filePath, 'r');
         fgetcsv($handle); // skip header
-        $chunkSize = 500;
+        $chunkSize = $this->chunkSize(500);
         $chunks = [];
+        $processedRows = 0;
 
         try {
             $stmt = $this->prepareChunkedStatement($chunkSize);
@@ -450,15 +481,19 @@ trait ImportHelper
 
                 if (count($chunks) === $chunkSize * 9) {  // 9 columns
                     $stmt->execute($chunks);
+                    $processedRows += $chunkSize;
+                    $this->reportChunkProgress($processedRows);
                     $chunks = [];
                 }
             }
 
             // Handle remaining records
             if (! empty($chunks)) {
-                $remainingRows = count($chunks) / 9;
+                $remainingRows = intdiv(count($chunks), 9);
                 $stmt = $this->prepareChunkedStatement($remainingRows);
                 $stmt->execute($chunks);
+                $processedRows += $remainingRows;
+                $this->reportChunkProgress($processedRows);
             }
         } finally {
             fclose($handle);
@@ -475,10 +510,11 @@ trait ImportHelper
         // 2M 8.8s
         $now = now()->format('Y-m-d H:i:s');
         $numberOfProcesses = 10;
+        $chunkSize = $this->chunkSize();
 
         $tasks = [];
         for ($i = 0; $i < $numberOfProcesses; $i++) {
-            $tasks[] = function () use ($filePath, $i, $numberOfProcesses, $now) {
+            $tasks[] = function () use ($filePath, $i, $numberOfProcesses, $now, $chunkSize) {
                 DB::reconnect();
 
                 $handle = fopen($filePath, 'r');
@@ -505,7 +541,7 @@ trait ImportHelper
                         'updated_at' => $now,
                     ];
 
-                    if (count($users) === 1000) {
+                    if (count($users) === $chunkSize) {
                         DB::table('users')->insert($users);
                         $users = [];
                     }
@@ -571,5 +607,37 @@ trait ImportHelper
         INSERT INTO users (custom_id, name, email, company, city, country, birthday, created_at, updated_at)
         VALUES {$placeholders}
     ");
+    }
+
+    protected function chunkSize(int $default = 1000): int
+    {
+        if (! method_exists($this, 'option')) {
+            return $default;
+        }
+
+        $value = $this->option('chunk-size');
+
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        $chunkSize = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        if ($chunkSize === false) {
+            throw new \InvalidArgumentException('The --chunk-size option must be a positive integer.');
+        }
+
+        return $chunkSize;
+    }
+
+    private function reportChunkProgress(int $processedRows): void
+    {
+        if ($processedRows % self::PROGRESS_ROW_INTERVAL !== 0) {
+            return;
+        }
+
+        $this->line('Processed '.number_format($processedRows).' rows...');
     }
 }

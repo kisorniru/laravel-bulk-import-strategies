@@ -40,6 +40,53 @@ This command processes CSV files containing user data and inserts the informatio
    ];
    ```
 
+## Laravel Sail Benchmark Setup
+
+This repository uses MySQL for the main benchmark path. If `docker-compose.yml` is not present locally, generate the Sail stack with MySQL first:
+
+```bash
+composer install
+php artisan sail:install --with=mysql
+cp .env.example .env
+```
+
+For Sail, update `.env` so Laravel connects to the MySQL container:
+
+```dotenv
+DB_HOST=mysql
+DB_DATABASE=import_million_rows
+MYSQL_ATTR_LOCAL_INFILE=true
+```
+
+Then start Sail, prepare the app, and run migrations:
+
+```bash
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan key:generate
+./vendor/bin/sail artisan migrate
+```
+
+The CSV files are tracked with Git LFS, so pull the real datasets before benchmarking:
+
+```bash
+git lfs pull
+```
+
+The native MySQL load strategy also needs `local_infile` enabled on the database server. For a local Sail container, enable it before running the benchmark:
+
+```bash
+./vendor/bin/sail mysql -e "SET GLOBAL local_infile = 1;"
+./vendor/bin/sail artisan import:users-data
+```
+
+## Troubleshooting Bulk Imports
+
+- **`LOAD DATA LOCAL INFILE` is rejected:** MySQL may have `local_infile` disabled. Keep `MYSQL_ATTR_LOCAL_INFILE=true` in `.env` and enable the server setting with `SET GLOBAL local_infile = 1;` or the equivalent MySQL configuration.
+- **CSV imports only a few strange rows:** The CSV files may still be Git LFS pointer files. Run `git lfs pull` and confirm files in `public/csv_files/` are full datasets, not small pointer text files.
+- **`Unknown column 'custom_id'`:** Some experimental helper strategies insert a `custom_id` field, but the default users migration may not include it. Add the column in the schema or use a strategy/query that matches the current table.
+- **Rows are missing after import:** The active load-file path skips malformed CSV rows that do not contain the expected columns. Check the source CSV for short or broken lines before comparing row totals.
+- **`Allowed memory size exhausted`:** Avoid strategies that preload the whole CSV for large datasets. Use streaming, chunked PDO, or the native MySQL load strategy, and start with the smallest dataset to validate setup.
+
 ## Usage
 
 1. Place your CSV file in a directory accessible by the Laravel application.
@@ -49,7 +96,25 @@ This command processes CSV files containing user data and inserts the informatio
    php artisan import:users-data /path/to/your/csvfile.csv
    ```
 
+   For chunk-based strategies, tune the batch size without editing source code:
+
+   ```bash
+   php artisan import:users-data --chunk-size=500
+   ```
+
 3. The command will read the CSV file, process the data, and insert the user records into the `users` table.
+
+## Benchmark Output
+
+After each import, the command prints a compact benchmark summary with elapsed time, memory usage, SQL query count, and inserted row count.
+
+Sample output only:
+
+```text
+TIME: 1.42s MEM: 0.23MB SQL: 104 ROWS: 100,000
+```
+
+Use these numbers as the output format, not as a performance guarantee. Actual results depend on the selected strategy, CSV size, database configuration, and local machine.
 
 ## Import Strategies
 

@@ -16,12 +16,14 @@ class CustomersImportCommand extends Command
      */
     use ImportHelper;
 
+    private const EXPECTED_CSV_COLUMNS = 6;
+
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'import:users-data';
+    protected $signature = 'import:users-data {--chunk-size= : Number of rows per batch for chunk-based import strategies}';
 
     /**
      * The console command description.
@@ -471,10 +473,11 @@ class CustomersImportCommand extends Command
 
         $pdo = DB::connection()->getPdo();
         $pdo->setAttribute(PDO::MYSQL_ATTR_LOCAL_INFILE, true);
-        $filepath = str_replace('\\', '/', $filepath);
+        $loadFilepath = $this->prepareLoadDataFile($filepath);
+        $loadFilepath = str_replace('\\', '/', $loadFilepath);
 
         $query = <<<SQL
-            LOAD DATA LOCAL INFILE '{$filepath}'
+            LOAD DATA LOCAL INFILE '{$loadFilepath}'
             INTO TABLE users
             FIELDS TERMINATED BY ','
             ENCLOSED BY '"'
@@ -491,7 +494,39 @@ class CustomersImportCommand extends Command
                 password = 'default_hashed_password'
         SQL;
 
-        $pdo->exec($query);
+        try {
+            $pdo->exec($query);
+        } finally {
+            unlink($loadFilepath);
+        }
 
+    }
+
+    private function prepareLoadDataFile(string $filepath): string
+    {
+        $source = fopen($filepath, 'rb');
+        $targetPath = tempnam(sys_get_temp_dir(), 'bulk-import-');
+        $target = fopen($targetPath, 'wb');
+
+        try {
+            $header = fgetcsv($source);
+
+            if ($header !== false) {
+                fputcsv($target, array_slice($header, 0, self::EXPECTED_CSV_COLUMNS));
+            }
+
+            while (($row = fgetcsv($source)) !== false) {
+                if (count($row) < self::EXPECTED_CSV_COLUMNS) {
+                    continue;
+                }
+
+                fputcsv($target, array_slice($row, 0, self::EXPECTED_CSV_COLUMNS));
+            }
+        } finally {
+            fclose($source);
+            fclose($target);
+        }
+
+        return $targetPath;
     }
 }
