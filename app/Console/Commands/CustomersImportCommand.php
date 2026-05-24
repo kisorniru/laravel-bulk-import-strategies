@@ -488,7 +488,7 @@ class CustomersImportCommand extends Command
                 city = @col4,
                 country = @col5,
                 birthday = @col6,
-                password = 'default_hashed_password',
+                password = 'default_hashed_password'
         SQL;
 
         $pdo->exec($query);
