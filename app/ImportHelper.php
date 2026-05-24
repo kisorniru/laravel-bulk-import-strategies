@@ -97,7 +97,28 @@ trait ImportHelper
         ));
         $this->newLine();
 
-        $this->persistBenchmarkSummary([
+        $this->persistBenchmarkSummary($this->benchmarkSummary(
+            $executionTime,
+            $formattedTime,
+            $memoryUsage,
+            $queriesCount,
+            $rowDiff
+        ));
+    }
+
+    protected function benchmarkStrategyName(): string
+    {
+        return class_basename($this);
+    }
+
+    protected function benchmarkSummary(
+        float $executionTime,
+        string $formattedTime,
+        float $memoryUsage,
+        int $queriesCount,
+        int $insertedRows
+    ): array {
+        return [
             'timestamp' => now()->toIso8601String(),
             'strategy' => $this->benchmarkStrategyName(),
             'dataset' => $this->benchmarkFilePath ? basename($this->benchmarkFilePath) : null,
@@ -106,21 +127,37 @@ trait ImportHelper
             'formatted_time' => $formattedTime,
             'memory_usage_mb' => $memoryUsage,
             'sql_queries' => $queriesCount,
-            'inserted_rows' => $rowDiff,
-        ]);
-    }
-
-    protected function benchmarkStrategyName(): string
-    {
-        return class_basename($this);
+            'inserted_rows' => $insertedRows,
+        ];
     }
 
     protected function persistBenchmarkSummary(array $summary): void
     {
-        $path = storage_path('logs/benchmark.log');
+        $path = $this->benchmarkLogPath();
+
+        if ($path === null) {
+            return;
+        }
 
         File::ensureDirectoryExists(dirname($path));
         File::append($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL);
+    }
+
+    protected function benchmarkLogPath(): ?string
+    {
+        $path = method_exists($this, 'option') ? $this->option('benchmark-log') : null;
+
+        if ($path === null || $path === '') {
+            return storage_path('logs/benchmark.log');
+        }
+
+        if (in_array(strtolower((string) $path), ['0', 'false', 'off', 'none'], true)) {
+            return null;
+        }
+
+        return str_starts_with((string) $path, DIRECTORY_SEPARATOR)
+            ? (string) $path
+            : base_path((string) $path);
     }
 
     private function import01BasicOneByOne(string $filePath): void
