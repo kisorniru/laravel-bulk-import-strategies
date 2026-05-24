@@ -25,6 +25,8 @@ trait ImportHelper
 
     protected ?string $benchmarkFilePath = null;
 
+    private const DEFAULT_CHUNK_SIZE = 1000;
+
     private const PROGRESS_ROW_INTERVAL = 100000;
 
     public function handle(): void
@@ -32,8 +34,12 @@ trait ImportHelper
         error_reporting(E_ALL);
         ini_set('display_errors', 1);
         $this->chunkSize();
-        User::truncate();
         $filePath = $this->selectFile();
+        $this->ensureImportFileIsReadable($filePath);
+        $this->info('Selected dataset: '.basename($filePath));
+        $this->info('Import strategy: '.$this->benchmarkStrategyName());
+
+        User::truncate();
         $this->benchmarkFilePath = $filePath;
         $this->startBenchmark();
 
@@ -61,6 +67,13 @@ trait ImportHelper
             'CSV 1M Users' => public_path('csv_files/users-1m.csv'),
             'CSV 2M Users' => public_path('csv_files/users-2m.csv'),
         };
+    }
+
+    protected function ensureImportFileIsReadable(string $filePath): void
+    {
+        if (! File::isFile($filePath) || ! is_readable($filePath)) {
+            throw new \InvalidArgumentException("The selected CSV file is not readable: {$filePath}");
+        }
     }
 
     protected function startBenchmark(string $table = 'users'): void
@@ -121,7 +134,7 @@ trait ImportHelper
         return [
             'timestamp' => now()->toIso8601String(),
             'strategy' => $this->benchmarkStrategyName(),
-            'dataset' => $this->benchmarkFilePath ? basename($this->benchmarkFilePath) : null,
+            'dataset' => $this->benchmarkDatasetName(),
             'file' => $this->benchmarkFilePath,
             'execution_time_seconds' => round($executionTime, 6),
             'formatted_time' => $formattedTime,
@@ -129,6 +142,11 @@ trait ImportHelper
             'sql_queries' => $queriesCount,
             'inserted_rows' => $insertedRows,
         ];
+    }
+
+    protected function benchmarkDatasetName(): ?string
+    {
+        return $this->benchmarkFilePath ? basename($this->benchmarkFilePath) : null;
     }
 
     protected function persistBenchmarkSummary(array $summary): void
@@ -140,7 +158,7 @@ trait ImportHelper
         }
 
         File::ensureDirectoryExists(dirname($path));
-        File::append($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL);
+        file_put_contents($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 
     protected function benchmarkLogPath(): ?string
@@ -675,7 +693,7 @@ trait ImportHelper
     ");
     }
 
-    protected function chunkSize(int $default = 1000): int
+    protected function chunkSize(int $default = self::DEFAULT_CHUNK_SIZE): int
     {
         if (! method_exists($this, 'option')) {
             return $default;

@@ -1,12 +1,10 @@
-Here’s the README content that you can copy and use for your GitHub project:
+# Laravel Bulk Import Strategies
 
-# Customers Data Import Command
-
-This Laravel Artisan command is designed to efficiently import large datasets (e.g., millions of user records) from a CSV file into the database. Several techniques are applied to handle large amounts of data, including chunking, memory management, and database prepared statements.
+This Laravel project is a benchmark playground for comparing CSV import strategies against a `users` table. It focuses on practical tradeoffs for large datasets: memory pressure, SQL query volume, execution time, MySQL bulk-loading requirements, and repeatable local setup.
 
 ## Overview
 
-This command processes CSV files containing user data and inserts the information into the `users` table in a MySQL database. The command includes various approaches to handle memory issues, improve performance, and manage large datasets efficiently.
+The main entry point is the `import:users-data` Artisan command. It prompts for one of the bundled CSV datasets, imports the rows through the active strategy, and prints benchmark telemetry that can be compared across approaches.
 
 ## Features
 
@@ -21,23 +19,22 @@ This command processes CSV files containing user data and inserts the informatio
 1. Clone the repository to your local machine:
 
    ```bash
-   git clone https://github.com/yourusername/repository-name.git
+   git clone https://github.com/kisorniru/laravel-bulk-import-strategies.git
+   cd laravel-bulk-import-strategies
    ```
 
-2. Install the required dependencies using Composer:
+2. Install dependencies and create the local environment file:
 
    ```bash
    composer install
+   cp .env.example .env
+   php artisan key:generate
    ```
 
-3. Add your `.env` database credentials to connect to your MySQL database.
+3. Update `.env` with your MySQL credentials, then run the migrations:
 
-4. Register the command in your `App\Console\Kernel.php` file:
-
-   ```php
-   protected $commands = [
-       \App\Console\Commands\CustomersImportCommand::class,
-   ];
+   ```bash
+   php artisan migrate
    ```
 
 ## Laravel Sail Benchmark Setup
@@ -64,6 +61,7 @@ Then start Sail, prepare the app, and run migrations:
 ./vendor/bin/sail up -d
 ./vendor/bin/sail artisan key:generate
 ./vendor/bin/sail artisan migrate
+./vendor/bin/sail artisan about
 ```
 
 The CSV files are tracked with Git LFS, so pull the real datasets before benchmarking:
@@ -86,6 +84,8 @@ The native MySQL load strategy also needs `local_infile` enabled on the database
 - **`Unknown column 'custom_id'`:** Some experimental helper strategies insert a `custom_id` field, but the default users migration may not include it. Add the column in the schema or use a strategy/query that matches the current table.
 - **Rows are missing after import:** The active load-file path skips malformed CSV rows that do not contain the expected columns. Check the source CSV for short or broken lines before comparing row totals.
 - **`Allowed memory size exhausted`:** Avoid strategies that preload the whole CSV for large datasets. Use streaming, chunked PDO, or the native MySQL load strategy, and start with the smallest dataset to validate setup.
+- **Selected CSV is not readable:** Confirm the dataset exists under `public/csv_files/`, Git LFS has pulled the real file, and the PHP/Sail process can read it.
+- **Benchmark history is not written:** Check write permissions for `storage/logs/`, or pass `--benchmark-log=storage/logs/custom-benchmark.log` to verify a custom path.
 
 ## Usage
 
@@ -120,6 +120,12 @@ Each run also appends a JSON summary line to `storage/logs/benchmark.log` so pre
 
 Use `--benchmark-log=storage/logs/my-benchmark.log` to write the history elsewhere, or `--benchmark-log=false` to run without writing a benchmark history file.
 
+Example history entry only:
+
+```json
+{"timestamp":"2026-02-05T19:14:00+06:00","strategy":"mysql_load_data_local_infile","dataset":"users-100.csv","file":"/path/to/public/csv_files/users-100.csv","execution_time_seconds":1.423456,"formatted_time":"1.42s","memory_usage_mb":0.23,"sql_queries":104,"inserted_rows":100}
+```
+
 ## Import Strategies
 
 ### Strategy Comparison Table
@@ -140,6 +146,8 @@ Below is a detailed comparison of the 12 import strategies implemented in the be
 | **10. PDO Prepared Chunked** | Extremely high performance and minimal memory footprint (~0.74MB delta). | Reuses static sized prepared statement chunk templates. | Maximum throughput raw SQL ingestion ($>1,000,000$ rows). |
 | **11. Concurrent (Fibers)** | High CPU utilization; concurrent PHP child processes. | Parallelized batch inserts. | Multi-core servers requiring lightning-fast parsing via parallel execution. |
 | **12. MySQL Load Infile** | 0MB PHP overhead; bypasses the application layer completely. | Single native database engine ingestion command. | Ultra-large scale CSV ingestion ($>2,000,000$ rows) with configured server permissions. |
+
+Use the table to choose a strategy by bottleneck: memory-constrained environments should start with streaming approaches, while MySQL-only throughput tests should validate `LOAD DATA LOCAL INFILE` setup first.
 
 ### Basic Approach
 This method reads the entire CSV file into memory and attempts to insert all records at once. While this approach is simple, it can be inefficient for large files and may result in memory exhaustion errors.
@@ -274,6 +282,13 @@ fclose($handle);
 - **Chunking:** Use chunking to break the CSV file into smaller parts, reducing memory consumption.
 - **Prepared Statements:** Using prepared statements helps improve performance and reduces the risk of SQL injection.
 - **Database Indexing:** Ensure that your database tables are properly indexed to speed up insertions.
+
+## Roadmap
+
+- Add a first-class strategy selector so the documented approaches can be run without editing source code.
+- Record optional machine metadata with benchmark history for easier comparisons across environments.
+- Add fixture-driven tests for every stream-based strategy that does not require a live MySQL server.
+- Consider a small benchmark report command that summarizes `storage/logs/benchmark.log`.
 
 ## Conclusion
 

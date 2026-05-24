@@ -24,7 +24,7 @@ class CustomersImportCommand extends Command
      * @var string
      */
     protected $signature = 'import:users-data
-        {--chunk-size= : Number of rows per batch for chunk-based import strategies}
+        {--chunk-size= : Number of rows per batch for chunk-based import strategies, defaults to 1000}
         {--benchmark-log= : Path for benchmark JSON lines, or "false" to disable}';
 
     /**
@@ -518,11 +518,11 @@ class CustomersImportCommand extends Command
             }
 
             while (($row = fgetcsv($source)) !== false) {
-                if (count($row) < self::EXPECTED_CSV_COLUMNS) {
+                if (! $this->hasExpectedCsvColumns($row)) {
                     continue;
                 }
 
-                fputcsv($target, array_slice($row, 0, self::EXPECTED_CSV_COLUMNS));
+                fputcsv($target, $this->csvRowForLoadData($row));
             }
         } finally {
             fclose($source);
@@ -530,6 +530,21 @@ class CustomersImportCommand extends Command
         }
 
         return $targetPath;
+    }
+
+    private function hasExpectedCsvColumns(array $row): bool
+    {
+        return ! $this->isEmptyCsvRow($row) && count($row) >= self::EXPECTED_CSV_COLUMNS;
+    }
+
+    private function csvRowForLoadData(array $row): array
+    {
+        return array_slice($row, 0, self::EXPECTED_CSV_COLUMNS);
+    }
+
+    private function isEmptyCsvRow(array $row): bool
+    {
+        return count($row) === 1 && trim((string) ($row[0] ?? '')) === '';
     }
 
     protected function benchmarkStrategyName(): string

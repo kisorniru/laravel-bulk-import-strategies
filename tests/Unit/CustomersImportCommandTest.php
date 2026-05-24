@@ -9,8 +9,10 @@ test('it skips malformed rows when preparing load data file', function () {
     file_put_contents($sourcePath, implode("\n", [
         'name,email,company,city,country,birthday',
         'Jane Doe,jane@example.com,Acme,Dhaka,Bangladesh,1992-05-15',
+        '',
         'Missing Columns,missing@example.com,Acme',
         'John Doe,john@example.com,Beta,Chittagong,Bangladesh,1990-01-01',
+        'Trailing Bad Row,trailing@example.com',
     ])."\n");
 
     try {
