@@ -36,8 +36,8 @@ trait ImportHelper
         $this->chunkSize();
         $filePath = $this->selectFile();
         $this->ensureImportFileIsReadable($filePath);
-        $this->info('Selected dataset: '.basename($filePath));
-        $this->info('Import strategy: '.$this->benchmarkStrategyName());
+        $this->info(sprintf('Selected dataset: %s (%s)', basename($filePath), $this->formatFileSize($filePath)));
+        $this->info('Import strategy: '.$this->benchmarkStrategyLabel());
 
         User::truncate();
         $this->benchmarkFilePath = $filePath;
@@ -74,6 +74,21 @@ trait ImportHelper
         if (! File::isFile($filePath) || ! is_readable($filePath)) {
             throw new \InvalidArgumentException("The selected CSV file is not readable: {$filePath}");
         }
+
+        if (File::size($filePath) === 0) {
+            throw new \InvalidArgumentException("The selected CSV file is empty: {$filePath}");
+        }
+    }
+
+    protected function formatFileSize(string $filePath): string
+    {
+        $bytes = File::size($filePath);
+
+        if ($bytes >= 1024 * 1024) {
+            return round($bytes / 1024 / 1024, 2).' MB';
+        }
+
+        return round($bytes / 1024, 2).' KB';
     }
 
     protected function startBenchmark(string $table = 'users'): void
@@ -124,6 +139,11 @@ trait ImportHelper
         return class_basename($this);
     }
 
+    protected function benchmarkStrategyLabel(): string
+    {
+        return Str::of($this->benchmarkStrategyName())->replace('_', ' ')->title()->value();
+    }
+
     protected function benchmarkSummary(
         float $executionTime,
         string $formattedTime,
@@ -158,7 +178,12 @@ trait ImportHelper
         }
 
         File::ensureDirectoryExists(dirname($path));
-        file_put_contents($path, json_encode($summary, JSON_UNESCAPED_SLASHES).PHP_EOL, FILE_APPEND | LOCK_EX);
+        file_put_contents($path, $this->benchmarkSummaryJsonLine($summary), FILE_APPEND | LOCK_EX);
+    }
+
+    protected function benchmarkSummaryJsonLine(array $summary): string
+    {
+        return json_encode($summary, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
     }
 
     protected function benchmarkLogPath(): ?string
@@ -699,9 +724,9 @@ trait ImportHelper
             return $default;
         }
 
-        $value = $this->option('chunk-size');
+        $value = trim((string) $this->option('chunk-size'));
 
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return $default;
         }
 

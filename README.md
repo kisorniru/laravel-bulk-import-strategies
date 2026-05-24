@@ -6,6 +6,12 @@ This Laravel project is a benchmark playground for comparing CSV import strategi
 
 The main entry point is the `import:users-data` Artisan command. It prompts for one of the bundled CSV datasets, imports the rows through the active strategy, and prints benchmark telemetry that can be compared across approaches.
 
+Primary goals:
+
+- Compare import strategies with the same datasets and telemetry shape.
+- Keep local setup reproducible for MySQL and Laravel Sail.
+- Preserve the older strategies as readable reference implementations.
+
 ## Features
 
 - Handles large CSV files with millions of rows.
@@ -27,6 +33,7 @@ The main entry point is the `import:users-data` Artisan command. It prompts for 
 
    ```bash
    composer install
+   npm install
    cp .env.example .env
    php artisan key:generate
    ```
@@ -35,6 +42,12 @@ The main entry point is the `import:users-data` Artisan command. It prompts for 
 
    ```bash
    php artisan migrate
+   ```
+
+4. Download the real CSV datasets if your checkout has Git LFS pointer files:
+
+   ```bash
+   git lfs pull
    ```
 
 ## Laravel Sail Benchmark Setup
@@ -77,6 +90,8 @@ The native MySQL load strategy also needs `local_infile` enabled on the database
 ./vendor/bin/sail artisan import:users-data
 ```
 
+You can pass the same benchmark options through Sail, for example `./vendor/bin/sail artisan import:users-data --benchmark-log=storage/logs/sail-benchmark.log`.
+
 ## Troubleshooting Bulk Imports
 
 - **`LOAD DATA LOCAL INFILE` is rejected:** MySQL may have `local_infile` disabled. Keep `MYSQL_ATTR_LOCAL_INFILE=true` in `.env` and enable the server setting with `SET GLOBAL local_infile = 1;` or the equivalent MySQL configuration.
@@ -86,6 +101,7 @@ The native MySQL load strategy also needs `local_infile` enabled on the database
 - **`Allowed memory size exhausted`:** Avoid strategies that preload the whole CSV for large datasets. Use streaming, chunked PDO, or the native MySQL load strategy, and start with the smallest dataset to validate setup.
 - **Selected CSV is not readable:** Confirm the dataset exists under `public/csv_files/`, Git LFS has pulled the real file, and the PHP/Sail process can read it.
 - **Benchmark history is not written:** Check write permissions for `storage/logs/`, or pass `--benchmark-log=storage/logs/custom-benchmark.log` to verify a custom path.
+- **Duplicate email constraint errors:** The default `users.email` column is unique. Clean duplicate rows before importing, or adapt experimental strategies to use `INSERT IGNORE` or an upsert pattern.
 
 ## Usage
 
@@ -111,6 +127,8 @@ After each import, the command prints a compact benchmark summary with elapsed t
 Sample output only:
 
 ```text
+Selected dataset: users-100.csv (10.84 KB)
+Import strategy: Mysql Load Data Local Infile
 TIME: 1.42s MEM: 0.23MB SQL: 104 ROWS: 100,000
 ```
 
@@ -148,6 +166,8 @@ Below is a detailed comparison of the 12 import strategies implemented in the be
 | **12. MySQL Load Infile** | 0MB PHP overhead; bypasses the application layer completely. | Single native database engine ingestion command. | Ultra-large scale CSV ingestion ($>2,000,000$ rows) with configured server permissions. |
 
 Use the table to choose a strategy by bottleneck: memory-constrained environments should start with streaming approaches, while MySQL-only throughput tests should validate `LOAD DATA LOCAL INFILE` setup first.
+
+Strategies that reference `custom_id` are kept for experimentation and may need a matching schema column before they can be run unchanged.
 
 ### Basic Approach
 This method reads the entire CSV file into memory and attempts to insert all records at once. While this approach is simple, it can be inefficient for large files and may result in memory exhaustion errors.
@@ -289,6 +309,7 @@ fclose($handle);
 - Record optional machine metadata with benchmark history for easier comparisons across environments.
 - Add fixture-driven tests for every stream-based strategy that does not require a live MySQL server.
 - Consider a small benchmark report command that summarizes `storage/logs/benchmark.log`.
+- Add optional filters to benchmark reports by strategy, dataset, or date range.
 
 ## Conclusion
 
